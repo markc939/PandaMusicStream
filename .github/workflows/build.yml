@@ -46,24 +46,8 @@ jobs:
         working-directory: private/ios
         run: pod install
 
-      - name: Neuter ExpoModulesJSI xcframework script in Pods project
-        working-directory: private
-        run: |
-          ruby -e '
-            require "xcodeproj"
-            project = Xcodeproj::Project.open("ios/Pods/Pods.xcodeproj")
-            project.targets.each do |target|
-              target.build_phases.each do |phase|
-                next unless phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
-                if phase.name&.include?("ExpoModulesJSI xcframework")
-                  phase.shell_script = "echo \"Skipping ExpoModulesJSI xcframework build - not needed for unsigned builds\""
-                  puts "Neutered: #{target.name} -> #{phase.name}"
-                end
-              end
-            end
-            project.save
-            puts "Done patching Pods project"
-          '
+      # ExpoModulesJSI xcframework used to fail on Xcode 16.4 (Swift mismatch) 
+      # With Xcode 26.3 selected above, it builds correctly now.
 
       - name: Find workspace and scheme
         id: find
