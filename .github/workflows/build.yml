@@ -11,70 +11,50 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout
+      - name: Checkout public CI repo
         uses: actions/checkout@v4
+
+      - name: Checkout private app repo
+        uses: actions/checkout@v4
+        with:
+          repository: markc939/Panda-Music-Stream
+          ssh-key: ${{ secrets.PRIVATE_REPO_KEY }}
+          path: private
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: private/package-lock.json
 
       - name: Install dependencies
+        working-directory: private
         run: npm ci --legacy-peer-deps
 
       - name: Expo prebuild
+        working-directory: private
         run: npx expo prebuild --platform ios --clean
 
-      - name: Patch Podfile to remove ExpoModulesJSI xcframework build
-        run: |
-          PODFILE="ios/Podfile"
-          # Add post_install hook to remove the problematic script phase
-          # The hook runs after pod install and strips the script from the Xcode project
-          cat >> "$PODFILE" << 'PATCH'
-
-          post_install do |installer|
-            installer.pods_project.targets.each do |target|
-              target.build_configurations.each do |config|
-                config.build_settings["CODE_SIGN_IDENTITY"] = "-"
-                config.build_settings["CODE_SIGNING_REQUIRED"] = "NO"
-                config.build_settings["CODE_SIGNING_ALLOWED"] = "NO"
-              end
-            end
-
-            # Remove ExpoModulesJSI xcframework build script phase (fails in CI)
-            installer.aggregate_targets.each do |aggregate_target|
-              aggregate_target.user_project.targets.each do |target|
-                target.shell_script_build_phases.each do |phase|
-                  if phase.name&.include?("ExpoModulesJSI xcframework")
-                    phase.remove_from_project
-                    puts "Removed ExpoModulesJSI xcframework script phase"
-                  end
-                end
-              end
-            end
-
-            installer.pods_project.targets.each do |target|
-              if target.respond_to?(:shell_script_build_phases)
-                target.shell_script_build_phases.each do |phase|
-                  if phase.name&.include?("ExpoModulesJSI xcframework")
-                    phase.remove_from_project
-                    puts "Removed ExpoModulesJSI xcframework from pod: #{target.name}"
-                  end
-                end
-              end
-            end
-          end
-          PATCH
-          echo "Patched Podfile with post_install hook"
-
       - name: Install CocoaPods
-        working-directory: ios
+        working-directory: private/ios
         run: pod install
+
+      - name: Patch ExpoModulesJSI script
+        working-directory: private
+        run: |
+          # Remove the ExpoModulesJSI xcframework build script phase from Pods project
+          # This script fails in CI but isn't needed for unsigned builds
+          find ios/Pods -path "*ExpoModulesJSI*" -name "*.sh" -type f 2>/dev/null | while read f; do
+            echo "Patching: $f"
+            echo '#!/bin/bash' > "$f"
+            echo 'exit 0' >> "$f"
+            chmod +x "$f"
+          done
 
       - name: Find workspace and scheme
         id: find
-        working-directory: ios
+        working-directory: private/ios
         run: |
           WORKSPACE=$(ls -d *.xcworkspace | head -1)
           SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list | sed -n '/Schemes:/,/Targets:/p' | grep -v "Schemes:" | grep -v "Targets:" | head -1 | xargs)
@@ -84,7 +64,7 @@ jobs:
           echo "Found scheme: $SCHEME"
 
       - name: Build unsigned app
-        working-directory: ios
+        working-directory: private/ios
         run: |
           xcodebuild \
             -workspace "${{ steps.find.outputs.workspace }}" \
@@ -92,11 +72,12 @@ jobs:
             -configuration Debug \
             -sdk iphoneos \
             -derivedDataPath build \
+            -clean \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO
 
       - name: Create unsigned IPA
-        working-directory: ios
+        working-directory: private/ios
         run: |
           APP_PATH=$(find build/Build/Products/Debug-iphoneos -name "*.app" -maxdepth 1 | head -1)
           if [ -z "$APP_PATH" ]; then
