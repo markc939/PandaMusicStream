@@ -28,10 +28,26 @@ jobs:
           cache: npm
           cache-dependency-path: private/package-lock.json
 
-      - name: Select latest available Xcode
+      - name: Select latest Xcode & install Swift 6.3 toolchain
         run: |
-          ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1 | xargs -I {} sudo xcode-select -s {}
-          xcodebuild -version
+          XCODE=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          echo "Xcode: $(xcodebuild -version)"
+          echo "Swift: $(swift --version 2>&1 | head -1)"
+          echo "=== Installing Swift 6.3 toolchain ==="
+          TOOLCHAIN_PKG="swift-6.3-DEVELOPMENT-SNAPSHOT-2025-07-22-a-osx.pkg"
+          TOOLCHAIN_URL="https://download.swift.org/development/xcode/latest-maintenance-swift-6_3-branch/xcode/swift-6.3-DEVELOPMENT-SNAPSHOT-2025-07-22-a/swift-6.3-DEVELOPMENT-SNAPSHOT-2025-07-22-a-osx.pkg"
+          curl -sL -o "/tmp/$TOOLCHAIN_PKG" "$TOOLCHAIN_URL" && echo "Downloaded toolchain"
+          sudo installer -pkg "/tmp/$TOOLCHAIN_PKG" -target / && echo "Installed toolchain"
+          TC_PATH=$(ls -d /Library/Developer/Toolchains/swift-6.3* 2>/dev/null | tail -1)
+          if [ -n "$TC_PATH" ]; then
+            TC_NAME=$(basename "$TC_PATH" .xctoolchain)
+            echo "TOOLCHAINS=$TC_NAME" >> $GITHUB_ENV
+            echo "Using Swift toolchain: $TC_NAME"
+          else
+            echo "No Swift 6.3 toolchain found, using default"
+          fi
+          swift --version 2>&1 | head -1
 
       - name: Install dependencies
         working-directory: private
@@ -45,34 +61,35 @@ jobs:
         working-directory: private/ios
         run: pod install
 
-      - name: Build unsigned IPA with expo run:ios
-        working-directory: private
+      - name: Build unsigned app with xcodebuild
+        working-directory: private/ios
         run: |
-          npx expo run:ios --no-install --configuration Debug 2>&1 | tail -20
-          echo "=== Searching for .app ==="
-          find . -name "PandaMusicStreamer.app" -type d -maxdepth 8 2>/dev/null | head -5
-          find . -path "*/Build/Products/*.app" -type d -maxdepth 8 2>/dev/null | head -5
-          # Build output goes to default DerivedData
-          APP=$(find ~/Library/Developer/Xcode/DerivedData -name "*.app" -type d -maxdepth 6 2>/dev/null | grep -v "Pods/" | grep -v "XCFramework" | head -1)
-          if [ -n "$APP" ]; then
-            echo "Found app: $APP"
-            mkdir -p Payload
-            cp -r "$APP" Payload/
-            zip -r PandaMusicStreamer.ipa Payload
-            rm -rf Payload
-            ls -lh PandaMusicStreamer.ipa
-          else
-            echo "No .app found, trying build/..."
-            APP=$(find build -name "*.app" -type d -maxdepth 6 2>/dev/null | grep -v "Pods/" | head -1)
-            if [ -n "$APP" ]; then
-              echo "Found app: $APP"
-              mkdir -p Payload && cp -r "$APP" Payload/ && zip -r PandaMusicStreamer.ipa Payload && rm -rf Payload
-            else
-              echo "No .app found at all"
-              exit 1
-            fi
-        env:
-          EXPO_NO_DEV_CLIENT: 1
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list | sed -n '/Schemes:/,/Targets:/p' | grep -v "Schemes:" | grep -v "Targets:" | head -1 | xargs)
+          echo "Building workspace: $WORKSPACE scheme: $SCHEME"
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Create unsigned IPA
+        working-directory: private/ios
+        run: |
+          APP=$(find build -name "*.app" -type d -maxdepth 4 | grep -v "Pods/" | grep -v "XCFramework" | head -1)
+          if [ -z "$APP" ]; then
+            echo "No .app found in build/"
+            find build -type d -name "*.app" 2>/dev/null
+            exit 1
+          fi
+          echo "Found: $APP"
+          mkdir -p Payload
+          cp -r "$APP" Payload/
+          zip -r "${{ github.workspace }}/PandaMusicStreamer.ipa" Payload
+          ls -lh "${{ github.workspace }}/PandaMusicStreamer.ipa"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
