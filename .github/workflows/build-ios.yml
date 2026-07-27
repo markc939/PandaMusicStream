@@ -23,35 +23,56 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Install Expo CLI
-        run: npm install -g eas-cli expo-cli
-
       - name: Expo prebuild
         run: npx expo prebuild --platform ios --clean
 
       - name: Install CocoaPods
         run: cd ios && pod install
 
+      - name: List Xcode schemes
+        run: |
+          cd ios
+          xcodebuild -list
+
+      - name: Find workspace and scheme
+        id: find
+        run: |
+          WORKSPACE=$(ls -d ios/*.xcworkspace | head -1)
+          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list | grep -A1 "Schemes:" | tail -1 | xargs)
+          echo "workspace=$WORKSPACE" >> $GITHUB_OUTPUT
+          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+          echo "Using workspace: $WORKSPACE"
+          echo "Using scheme: $SCHEME"
+
       - name: Build unsigned app
         run: |
           cd ios
           xcodebuild \
-            -workspace PandaMusicStreamer.xcworkspace \
-            -scheme PandaMusicStreamer \
+            -workspace "${{ steps.find.outputs.workspace }}" \
+            -scheme "${{ steps.find.outputs.scheme }}" \
             -configuration Debug \
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ENTITLEMENTS="" | tail -20
+            CODE_SIGN_ENTITLEMENTS=""
 
       - name: Create unsigned IPA
         run: |
+          cd ios
+          APP_PATH=$(find build/Build/Products/Debug-iphoneos -name "*.app" -maxdepth 1 | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: No .app found"
+            find build -name "*.app"
+            exit 1
+          fi
+          echo "Found app: $APP_PATH"
           mkdir -p Payload
-          cp -r ios/build/Build/Products/Debug-iphoneos/*.app Payload/
-          zip -r PandaMusicStreamer.ipa Payload
-          rm -rf Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r ../PandaMusicStreamer.ipa Payload
+          cd ..
+          ls -lh PandaMusicStreamer.ipa
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
