@@ -74,7 +74,7 @@ jobs:
             -configuration Debug \
             -sdk iphoneos \
             -derivedDataPath build \
-            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO 2>&1 | tee build.log | tail -5
           BUILD_EXIT=${PIPESTATUS[0]}
           echo "xcodebuild exit code: $BUILD_EXIT"
