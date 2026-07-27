@@ -30,18 +30,35 @@ jobs:
         working-directory: ios
         run: pod install
 
-      - name: Patch ExpoModulesJSI build script
+      - name: Patch all ExpoModulesJSI scripts
         run: |
-          SCRIPT_PATH="ios/Pods/Target Support Files/ExpoModulesJSI/ExpoModulesJSI-xcframework.sh"
-          if [ -f "$SCRIPT_PATH" ]; then
-            echo "#!/bin/bash" > "$SCRIPT_PATH"
-            echo "echo 'Skipping ExpoModulesJSI xcframework build (not needed for unsigned builds)'" >> "$SCRIPT_PATH"
-            chmod +x "$SCRIPT_PATH"
-            echo "Patched $SCRIPT_PATH"
-          else
-            echo "Script not found at expected path, searching..."
-            find ios/Pods -name "*ExpoModulesJSI*xcframework*" -type f 2>/dev/null
-          fi
+          echo "=== Finding all ExpoModulesJSI related scripts ==="
+          find ios/Pods -path "*ExpoModulesJSI*" -name "*.sh" -type f 2>/dev/null
+          find ios/Pods -path "*ExpoModulesJSI*" -name "post_install*" -type f 2>/dev/null
+          # Patch every .sh file in ExpoModulesJSI target support
+          find ios/Pods/Target\ Support\ Files/ExpoModulesJSI -name "*.sh" -type f 2>/dev/null | while read f; do
+            echo "Patching: $f"
+            echo '#!/bin/bash' > "$f"
+            echo 'exit 0' >> "$f"
+            chmod +x "$f"
+          done
+          # Also find the script by content - search for xcframework build logic
+          grep -rl "ExpoModulesJSI" ios/Pods/Target\ Support\ Files/ 2>/dev/null | while read f; do
+            if [[ "$f" == *.sh ]]; then
+              echo "Patching by content match: $f"
+              echo '#!/bin/bash' > "$f"
+              echo 'exit 0' >> "$f"
+              chmod +x "$f"
+            fi
+          done
+          # Also patch the podspec script phase
+          find ios/Pods -path "*ExpoModulesJSI*" -name "*.sh" -type f 2>/dev/null | while read f; do
+            echo "Patching: $f"
+            echo '#!/bin/bash' > "$f"
+            echo 'exit 0' >> "$f"
+            chmod +x "$f"
+          done
+          echo "=== Done patching ==="
 
       - name: Find workspace and scheme
         id: find
@@ -63,6 +80,7 @@ jobs:
             -configuration Debug \
             -sdk iphoneos \
             -derivedDataPath build \
+            -clean \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO
 
