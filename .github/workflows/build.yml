@@ -7,8 +7,8 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
-    timeout-minutes: 45
+    runs-on: macos-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout public CI repo
@@ -28,26 +28,20 @@ jobs:
           cache: npm
           cache-dependency-path: private/package-lock.json
 
-      - name: Select latest Xcode & install Swift 6.3 toolchain
+      - name: Show runner environment
         run: |
-          XCODE=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
-          sudo xcode-select -s "$XCODE"
-          echo "Xcode: $(xcodebuild -version)"
-          echo "Swift: $(swift --version 2>&1 | head -1)"
-          echo "=== Installing Swift 6.3 toolchain ==="
-          TOOLCHAIN_PKG="swift-6.3-DEVELOPMENT-SNAPSHOT-2025-07-22-a-osx.pkg"
-          TOOLCHAIN_URL="https://download.swift.org/development/xcode/latest-maintenance-swift-6_3-branch/xcode/swift-6.3-DEVELOPMENT-SNAPSHOT-2025-07-22-a/swift-6.3-DEVELOPMENT-SNAPSHOT-2025-07-22-a-osx.pkg"
-          curl -sL -o "/tmp/$TOOLCHAIN_PKG" "$TOOLCHAIN_URL" && echo "Downloaded toolchain"
-          sudo installer -pkg "/tmp/$TOOLCHAIN_PKG" -target / && echo "Installed toolchain"
-          TC_PATH=$(ls -d /Library/Developer/Toolchains/swift-6.3* 2>/dev/null | tail -1)
-          if [ -n "$TC_PATH" ]; then
-            TC_NAME=$(basename "$TC_PATH" .xctoolchain)
-            echo "TOOLCHAINS=$TC_NAME" >> $GITHUB_ENV
-            echo "Using Swift toolchain: $TC_NAME"
-          else
-            echo "No Swift 6.3 toolchain found, using default"
-          fi
+          echo "=== Runner ==="
+          uname -a
+          echo "=== Xcode versions ==="
+          ls -d /Applications/Xcode*.app 2>/dev/null
+          echo "=== Default Xcode ==="
+          xcodebuild -version
+          echo "=== Swift ==="
           swift --version 2>&1 | head -1
+          echo "=== Toolchains ==="
+          ls /Library/Developer/Toolchains/ 2>/dev/null || echo "none"
+          echo "=== xcrun swift ==="
+          xcrun swift --version 2>&1 | head -1
 
       - name: Install dependencies
         working-directory: private
