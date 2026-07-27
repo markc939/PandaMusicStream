@@ -30,35 +30,24 @@ jobs:
         working-directory: ios
         run: pod install
 
-      - name: Patch all ExpoModulesJSI scripts
+      - name: Remove ExpoModulesJSI xcframework script phase from Pods project
         run: |
-          echo "=== Finding all ExpoModulesJSI related scripts ==="
-          find ios/Pods -path "*ExpoModulesJSI*" -name "*.sh" -type f 2>/dev/null
-          find ios/Pods -path "*ExpoModulesJSI*" -name "post_install*" -type f 2>/dev/null
-          # Patch every .sh file in ExpoModulesJSI target support
-          find ios/Pods/Target\ Support\ Files/ExpoModulesJSI -name "*.sh" -type f 2>/dev/null | while read f; do
-            echo "Patching: $f"
-            echo '#!/bin/bash' > "$f"
-            echo 'exit 0' >> "$f"
-            chmod +x "$f"
-          done
-          # Also find the script by content - search for xcframework build logic
-          grep -rl "ExpoModulesJSI" ios/Pods/Target\ Support\ Files/ 2>/dev/null | while read f; do
-            if [[ "$f" == *.sh ]]; then
-              echo "Patching by content match: $f"
-              echo '#!/bin/bash' > "$f"
-              echo 'exit 0' >> "$f"
-              chmod +x "$f"
-            fi
-          done
-          # Also patch the podspec script phase
-          find ios/Pods -path "*ExpoModulesJSI*" -name "*.sh" -type f 2>/dev/null | while read f; do
-            echo "Patching: $f"
-            echo '#!/bin/bash' > "$f"
-            echo 'exit 0' >> "$f"
-            chmod +x "$f"
-          done
-          echo "=== Done patching ==="
+          cd ios
+          PROJECT="Pods/Pods.xcodeproj/project.pbxproj"
+          # Remove the script phase reference for ExpoModulesJSI xcframework build
+          # This is a known issue - the script fails in CI but isn't needed for unsigned builds
+          ruby -e '
+            content = File.read("'"$PROJECT"'")
+            # Remove the shellScript content for ExpoModulesJSI xcframework build
+            content.gsub!(/\* Build ExpoModulesJSI xcframework \*\/\s*=\s*\{[^}]*shellScript\s*=\s*"[^"]*";/m, '')
+            # Also try to remove the PBXShellScriptBuildPhase entirely
+            content.gsub!(/\{[^}]*name\s*=\s*"\[CP-User\] Build ExpoModulesJSI xcframework";[^}]*\}/m, '')
+            File.write("'"$PROJECT"'", content)
+            puts "Patched project.pbxproj"
+          ' || echo "Ruby patch failed, trying sed fallback"
+          # Fallback: use sed to remove lines containing the ExpoModulesJSI script
+          sed -i '' '/ExpoModulesJSI xcframework/d' "$PROJECT" 2>/dev/null || true
+          echo "Done patching Pods project"
 
       - name: Find workspace and scheme
         id: find
