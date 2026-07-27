@@ -46,8 +46,26 @@ jobs:
         working-directory: private/ios
         run: pod install
 
-      # ExpoModulesJSI xcframework used to fail on Xcode 16.4 (Swift mismatch) 
-      # With Xcode 26.3 selected above, it builds correctly now.
+      - name: Debug and fix ExpoModulesJSI xcframework build
+        working-directory: private
+        run: |
+          ruby -e '
+            require "xcodeproj"
+            project = Xcodeproj::Project.open("ios/Pods/Pods.xcodeproj")
+            project.targets.each do |target|
+              next unless target.name == "ExpoModulesJSI"
+              target.build_phases.each do |phase|
+                next unless phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+                puts "=== ExpoModulesJSI build script content ==="
+                puts phase.shell_script
+                puts "=== End of script ==="
+                puts "Trying to run script manually..."
+                system("bash", "-x", "-c", phase.shell_script)
+                exit_code = $?.exitstatus
+                puts "Script exit code: #{exit_code}"
+              end
+            end
+          ' 2>&1
 
       - name: Find workspace and scheme
         id: find
