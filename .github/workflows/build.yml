@@ -80,13 +80,12 @@ jobs:
       - name: Build unsigned app
         working-directory: private/ios
         run: |
-          xcodebuild \
+          xcodebuild clean build \
             -workspace "${{ steps.find.outputs.workspace }}" \
             -scheme "${{ steps.find.outputs.scheme }}" \
             -configuration Debug \
             -sdk iphoneos \
             -derivedDataPath build \
-            -clean \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO
 
