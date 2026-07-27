@@ -36,11 +36,7 @@ jobs:
         working-directory: private
         run: npx expo prebuild --platform ios --clean
 
-      - name: Install CocoaPods
-        working-directory: private/ios
-        run: pod install
-
-      - name: Patch Podfile for CI build
+      - name: Patch Podfile BEFORE pod install
         working-directory: private
         run: |
           cat >> ios/Podfile << 'PATCH'
@@ -53,18 +49,21 @@ jobs:
                 config.build_settings["CODE_SIGNING_ALLOWED"] = "NO"
               end
 
-              if target.respond_to?(:shell_script_build_phases)
-                target.shell_script_build_phases.each do |phase|
-                  if phase.name&.include?("ExpoModulesJSI xcframework")
-                    phase.remove_from_project
-                    puts "Removed ExpoModulesJSI xcframework from: #{target.name}"
-                  end
+              target.build_phases.each do |phase|
+                next unless phase.respond_to?(:name) && phase.respond_to?(:shell_script)
+                if phase.name&.include?("ExpoModulesJSI xcframework")
+                  phase.shell_script = "echo Skipping ExpoModulesJSI xcframework build"
+                  puts "Neutered ExpoModulesJSI script in: #{target.name}"
                 end
               end
             end
           end
           PATCH
-          echo "Patched Podfile with post_install hook"
+          echo "Patched Podfile"
+
+      - name: Install CocoaPods
+        working-directory: private/ios
+        run: pod install
 
       - name: Find workspace and scheme
         id: find
