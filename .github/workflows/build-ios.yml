@@ -27,26 +27,23 @@ jobs:
         run: npx expo prebuild --platform ios --clean
 
       - name: Install CocoaPods
-        run: cd ios && pod install
-
-      - name: List Xcode schemes
-        run: |
-          cd ios
-          xcodebuild -list
+        working-directory: ios
+        run: pod install
 
       - name: Find workspace and scheme
         id: find
+        working-directory: ios
         run: |
-          WORKSPACE=$(ls -d ios/*.xcworkspace | head -1)
-          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list | grep -A1 "Schemes:" | tail -1 | xargs)
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list | sed -n '/Schemes:/,/Targets:/p' | grep -v "Schemes:" | grep -v "Targets:" | head -1 | xargs)
           echo "workspace=$WORKSPACE" >> $GITHUB_OUTPUT
           echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
-          echo "Using workspace: $WORKSPACE"
-          echo "Using scheme: $SCHEME"
+          echo "Found workspace: $WORKSPACE"
+          echo "Found scheme: $SCHEME"
 
       - name: Build unsigned app
+        working-directory: ios
         run: |
-          cd ios
           xcodebuild \
             -workspace "${{ steps.find.outputs.workspace }}" \
             -scheme "${{ steps.find.outputs.scheme }}" \
@@ -59,20 +56,21 @@ jobs:
             CODE_SIGN_ENTITLEMENTS=""
 
       - name: Create unsigned IPA
+        working-directory: ios
         run: |
-          cd ios
           APP_PATH=$(find build/Build/Products/Debug-iphoneos -name "*.app" -maxdepth 1 | head -1)
           if [ -z "$APP_PATH" ]; then
-            echo "ERROR: No .app found"
-            find build -name "*.app"
+            echo "ERROR: No .app found. Listing build directory:"
+            find build -type f -name "*.app" 2>/dev/null
+            echo "Contents of build/Build/Products/:"
+            ls -la build/Build/Products/ 2>/dev/null
             exit 1
           fi
           echo "Found app: $APP_PATH"
           mkdir -p Payload
           cp -r "$APP_PATH" Payload/
-          zip -r ../PandaMusicStreamer.ipa Payload
-          cd ..
-          ls -lh PandaMusicStreamer.ipa
+          zip -r "${{ github.workspace }}/PandaMusicStreamer.ipa" Payload
+          ls -lh "${{ github.workspace }}/PandaMusicStreamer.ipa"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
