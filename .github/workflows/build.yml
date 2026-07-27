@@ -59,11 +59,20 @@ jobs:
         working-directory: private/ios
         run: |
           WORKSPACE=$(ls -d *.xcworkspace | head -1)
-          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list | sed -n '/Schemes:/,/Targets:/p' | grep -v "Schemes:" | grep -v "Targets:" | head -1 | xargs)
-          echo "Building workspace: $WORKSPACE scheme: $SCHEME"
+          # Find the app scheme (not pod schemes like EXApplication)
+          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list 2>/dev/null | sed -n '/Schemes:/,/Targets:/p' | grep -v "Schemes:" | grep -v "Targets:" | grep -v "^$" | head -5)
+          echo "Available schemes:"
+          echo "$SCHEME"
+          # Pick the first scheme that's NOT a pod (pod schemes start with EX, React, RN, etc.)
+          APP_SCHEME=$(echo "$SCHEME" | grep -v "^EX" | grep -v "^React" | grep -v "^RN" | grep -v "^hermes" | grep -v "^Yoga" | grep -v "^Common" | head -1 | xargs)
+          if [ -z "$APP_SCHEME" ]; then
+            # Fallback: use the last scheme (app is usually listed last)
+            APP_SCHEME=$(echo "$SCHEME" | tail -1 | xargs)
+          fi
+          echo "Using scheme: $APP_SCHEME"
           xcodebuild \
             -workspace "$WORKSPACE" \
-            -scheme "$SCHEME" \
+            -scheme "$APP_SCHEME" \
             -configuration Debug \
             -sdk iphoneos \
             -derivedDataPath build \
