@@ -45,10 +45,10 @@ jobs:
         working-directory: private/ios
         run: pod install
 
-      - name: Neuter ExpoModulesJSI + provide pre-built framework
+      - name: Neuter ExpoModulesJSI + supply pre-built framework
         working-directory: private
         run: |
-          # Step 1: Neuter the broken build script
+          # Neut the broken build script
           ruby -e '
             require "xcodeproj"
             project = Xcodeproj::Project.open("ios/Pods/Pods.xcodeproj")
@@ -56,35 +56,18 @@ jobs:
               target.build_phases.each do |phase|
                 next unless phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
                 if phase.name&.include?("ExpoModulesJSI xcframework")
-                  puts "Neutered script phase: #{target.name} -> #{phase.name}"
                   phase.shell_script = "exit 0"
                 end
               end
             end
             project.save
-            puts "Saved Pods project"
           '
-          
-          # Step 2: Find the pre-built ExpoModulesJSI.xcframework and copy it into place
-          echo "=== Looking for pre-built ExpoModulesJSI.xcframework ==="
-          PREDEFS=$(find . -path "*/Products/ExpoModulesJSI.xcframework" -type d 2>/dev/null)
-          if [ -n "$PREDEFS" ]; then
-            echo "Found pre-built framework at: $PREDEFS"
-            for fw in $PREDEFS; do
-              echo "Framework: $fw"
-              ls -la "$fw/" 2>/dev/null
-            done
-          else
-            echo "No pre-built framework found in Products"
-          fi
-          
-          # Also look for the xcframework anywhere in node_modules
-          echo "=== Searching for any ExpoModulesJSI.xcframework ==="
-          find "$(pwd)/node_modules" -name "ExpoModulesJSI.xcframework" -type d 2>/dev/null | head -10
-          
-          # Check expo-modules-jsi package contents
-          echo "=== ExpoModulesJSI package contents ==="
-          find "$(pwd)/node_modules/expo-modules-jsi" -maxdepth 4 -not -path "*/node_modules/*" 2>/dev/null | head -40
+          # Copy the pre-built framework to where xcodebuild expects it
+          FW="node_modules/expo-modules-jsi/apple/Products/ExpoModulesJSI.xcframework"
+          DEST="ios/build/Build/Products/Debug-iphoneos/XCFrameworkIntermediates/ExpoModulesJSI"
+          mkdir -p "$DEST"
+          cp -R "$FW/" "$DEST/"
+          echo "Copied ExpoModulesJSI.xcframework to $DEST"
 
       - name: Find workspace and scheme
         id: find
@@ -98,7 +81,7 @@ jobs:
       - name: Build unsigned app
         working-directory: private/ios
         run: |
-          xcodebuild clean build \
+          xcodebuild \
             -workspace "${{ steps.find.outputs.workspace }}" \
             -scheme "${{ steps.find.outputs.scheme }}" \
             -configuration Debug \
