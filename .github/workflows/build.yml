@@ -28,6 +28,12 @@ jobs:
           cache: npm
           cache-dependency-path: private/package-lock.json
 
+      - name: Select latest available Xcode
+        run: |
+          ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1 | xargs -I {} sudo xcode-select -s {}
+          xcodebuild -version
+          swift --version 2>&1 | head -1
+
       - name: Install dependencies
         working-directory: private
         run: npm ci --legacy-peer-deps
