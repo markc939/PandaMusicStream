@@ -45,65 +45,34 @@ jobs:
         working-directory: private/ios
         run: pod install
 
-      - name: Neuter ExpoModulesJSI + supply pre-built framework
+      - name: Build unsigned IPA with expo run:ios
         working-directory: private
         run: |
-          # Neut the broken build script
-          ruby -e '
-            require "xcodeproj"
-            project = Xcodeproj::Project.open("ios/Pods/Pods.xcodeproj")
-            project.targets.each do |target|
-              target.build_phases.each do |phase|
-                next unless phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
-                if phase.name&.include?("ExpoModulesJSI xcframework")
-                  phase.shell_script = "exit 0"
-                end
-              end
-            end
-            project.save
-          '
-          # Copy the pre-built framework to where xcodebuild expects it
-          FW="node_modules/expo-modules-jsi/apple/Products/ExpoModulesJSI.xcframework"
-          DEST="ios/build/Build/Products/Debug-iphoneos/XCFrameworkIntermediates/ExpoModulesJSI"
-          mkdir -p "$DEST"
-          cp -R "$FW/" "$DEST/"
-          echo "Copied ExpoModulesJSI.xcframework to $DEST"
-
-      - name: Find workspace and scheme
-        id: find
-        working-directory: private/ios
-        run: |
-          WORKSPACE=$(ls -d *.xcworkspace | head -1)
-          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list | sed -n '/Schemes:/,/Targets:/p' | grep -v "Schemes:" | grep -v "Targets:" | head -1 | xargs)
-          echo "workspace=$WORKSPACE" >> $GITHUB_OUTPUT
-          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
-
-      - name: Build unsigned app
-        working-directory: private/ios
-        run: |
-          xcodebuild \
-            -workspace "${{ steps.find.outputs.workspace }}" \
-            -scheme "${{ steps.find.outputs.scheme }}" \
-            -configuration Debug \
-            -sdk iphoneos \
-            -derivedDataPath build \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO
-
-      - name: Create unsigned IPA
-        working-directory: private/ios
-        run: |
-          APP_PATH=$(find build/Build/Products/Debug-iphoneos -name "*.app" -maxdepth 1 | head -1)
-          if [ -z "$APP_PATH" ]; then
-            echo "ERROR: No .app found"
-            find build -type f -name "*.app" 2>/dev/null
-            exit 1
-          fi
-          echo "Found app: $APP_PATH"
-          mkdir -p Payload
-          cp -r "$APP_PATH" Payload/
-          zip -r "${{ github.workspace }}/PandaMusicStreamer.ipa" Payload
-          ls -lh "${{ github.workspace }}/PandaMusicStreamer.ipa"
+          npx expo run:ios --no-install --configuration Debug 2>&1 | tail -20
+          echo "=== Searching for .app ==="
+          find . -name "PandaMusicStreamer.app" -type d -maxdepth 8 2>/dev/null | head -5
+          find . -path "*/Build/Products/*.app" -type d -maxdepth 8 2>/dev/null | head -5
+          # Build output goes to default DerivedData
+          APP=$(find ~/Library/Developer/Xcode/DerivedData -name "*.app" -type d -maxdepth 6 2>/dev/null | grep -v "Pods/" | grep -v "XCFramework" | head -1)
+          if [ -n "$APP" ]; then
+            echo "Found app: $APP"
+            mkdir -p Payload
+            cp -r "$APP" Payload/
+            zip -r PandaMusicStreamer.ipa Payload
+            rm -rf Payload
+            ls -lh PandaMusicStreamer.ipa
+          else
+            echo "No .app found, trying build/..."
+            APP=$(find build -name "*.app" -type d -maxdepth 6 2>/dev/null | grep -v "Pods/" | head -1)
+            if [ -n "$APP" ]; then
+              echo "Found app: $APP"
+              mkdir -p Payload && cp -r "$APP" Payload/ && zip -r PandaMusicStreamer.ipa Payload && rm -rf Payload
+            else
+              echo "No .app found at all"
+              exit 1
+            fi
+        env:
+          EXPO_NO_DEV_CLIENT: 1
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
