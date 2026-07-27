@@ -44,20 +44,19 @@ jobs:
         working-directory: private
         run: |
           ruby -e '
-            project_path = "ios/Pods/Pods.xcodeproj/project.pbxproj"
-            content = File.read(project_path)
-            # Replace the ExpoModulesJSI xcframework build script with a no-op
-            content.gsub!(
-              /\[CP-User\] Build ExpoModulesJSI xcframework/,
-              "[CP-User] Build ExpoModulesJSI xcframework (SKIPPED)"
-            )
-            # Find shellScript blocks that contain the xcframework build logic and replace
-            content.gsub!(
-              /shellScript = "([^"]*ExpoModulesJSI[^"]*)"/,
-              "shellScript = \"echo Skipping ExpoModulesJSI xcframework build\""
-            )
-            File.write(project_path, content)
-            puts "Patched Pods project to skip ExpoModulesJSI xcframework build"
+            require "xcodeproj"
+            project = Xcodeproj::Project.open("ios/Pods/Pods.xcodeproj")
+            project.targets.each do |target|
+              target.build_phases.each do |phase|
+                next unless phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+                if phase.name&.include?("ExpoModulesJSI xcframework")
+                  phase.shell_script = "echo \"Skipping ExpoModulesJSI xcframework build - not needed for unsigned builds\""
+                  puts "Neutered: #{target.name} -> #{phase.name}"
+                end
+              end
+            end
+            project.save
+            puts "Done patching Pods project"
           '
 
       - name: Find workspace and scheme
