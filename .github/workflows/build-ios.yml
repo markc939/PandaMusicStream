@@ -1,0 +1,61 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Install Expo CLI
+        run: npm install -g eas-cli expo-cli
+
+      - name: Expo prebuild
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Install CocoaPods
+        run: cd ios && pod install
+
+      - name: Build unsigned app
+        run: |
+          cd ios
+          xcodebuild \
+            -workspace PandaMusicStreamer.xcworkspace \
+            -scheme PandaMusicStreamer \
+            -configuration Debug \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" | tail -20
+
+      - name: Create unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -r ios/build/Build/Products/Debug-iphoneos/*.app Payload/
+          zip -r PandaMusicStreamer.ipa Payload
+          rm -rf Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PandaMusicStreamer-unsigned
+          path: PandaMusicStreamer.ipa
+          retention-days: 14

@@ -1,0 +1,23 @@
+{
+  "cli": {
+    "version": ">= 14.0.0"
+  },
+  "build": {
+    "simulator": {
+      "developmentClient": true,
+      "ios": {
+        "simulator": true
+      }
+    },
+    "device": {
+      "developmentClient": true,
+      "ios": {
+        "simulator": false
+      }
+    },
+    "production": {}
+  },
+  "submit": {
+    "production": {}
+  }
+}
