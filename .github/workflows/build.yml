@@ -68,15 +68,22 @@ jobs:
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO 2>&1 | tee build.log | tail -30
+          echo "Exit code: ${PIPESTATUS[0]}"
+          exit ${PIPESTATUS[0]}
 
       - name: Create unsigned IPA
+        if: always()
         working-directory: private/ios
         run: |
-          APP=$(find build -name "*.app" -type d -maxdepth 4 | grep -v "Pods/" | grep -v "XCFramework" | head -1)
+          echo "=== Searching for .app ==="
+          find build -type d -name "*.app" 2>/dev/null | head -10
+          find ~/Library/Developer/Xcode/DerivedData -type d -name "*.app" 2>/dev/null | head -10
+          echo "=== Last 20 lines of build log ==="
+          tail -20 build.log 2>/dev/null || echo "No build log"
+          APP=$(find build -name "*.app" -type d -maxdepth 6 | grep -v "Pods/" | grep -v "XCFramework" | head -1)
           if [ -z "$APP" ]; then
-            echo "No .app found in build/"
-            find build -type d -name "*.app" 2>/dev/null
+            echo "No .app found"
             exit 1
           fi
           echo "Found: $APP"
