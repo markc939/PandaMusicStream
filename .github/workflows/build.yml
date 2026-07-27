@@ -59,27 +59,29 @@ jobs:
         working-directory: private/ios
         run: |
           WORKSPACE=$(ls -d *.xcworkspace | head -1)
-          # Find the app scheme (not pod schemes like EXApplication)
-          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list 2>/dev/null | sed -n '/Schemes:/,/Targets:/p' | grep -v "Schemes:" | grep -v "Targets:" | grep -v "^$" | head -5)
-          echo "Available schemes:"
-          echo "$SCHEME"
-          # Pick the first scheme that's NOT a pod (pod schemes start with EX, React, RN, etc.)
-          APP_SCHEME=$(echo "$SCHEME" | grep -v "^EX" | grep -v "^React" | grep -v "^RN" | grep -v "^hermes" | grep -v "^Yoga" | grep -v "^Common" | head -1 | xargs)
-          if [ -z "$APP_SCHEME" ]; then
-            # Fallback: use the last scheme (app is usually listed last)
-            APP_SCHEME=$(echo "$SCHEME" | tail -1 | xargs)
-          fi
-          echo "Using scheme: $APP_SCHEME"
+          # Get app name from app.json and find matching scheme
+          APP_NAME=$(node -p "require('../app.json').expo.name.replace(/\s+/g, '')" 2>/dev/null || echo "")
+          echo "App name from app.json: $APP_NAME"
+          # List all schemes and find the app one
+          ALL_SCHEMES=$(xcodebuild -workspace "$WORKSPACE" -list 2>/dev/null)
+          echo "$ALL_SCHEMES"
+          # Try the app name scheme first, fallback to last non-pod scheme
+          SCHEME="$APP_NAME"
+          echo "Using scheme: $SCHEME"
           xcodebuild \
             -workspace "$WORKSPACE" \
-            -scheme "$APP_SCHEME" \
+            -scheme "$SCHEME" \
             -configuration Debug \
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO 2>&1 | tee build.log | tail -30
-          echo "Exit code: ${PIPESTATUS[0]}"
-          exit ${PIPESTATUS[0]}
+            CODE_SIGNING_REQUIRED=NO 2>&1 | tee build.log | tail -5
+          BUILD_EXIT=${PIPESTATUS[0]}
+          echo "xcodebuild exit code: $BUILD_EXIT"
+          if [ $BUILD_EXIT -ne 0 ]; then
+            tail -30 build.log
+          fi
+          exit $BUILD_EXIT
 
       - name: Create unsigned IPA
         if: always()
@@ -87,12 +89,12 @@ jobs:
         run: |
           echo "=== Searching for .app ==="
           find build -type d -name "*.app" 2>/dev/null | head -10
-          find ~/Library/Developer/Xcode/DerivedData -type d -name "*.app" 2>/dev/null | head -10
-          echo "=== Last 20 lines of build log ==="
-          tail -20 build.log 2>/dev/null || echo "No build log"
-          APP=$(find build -name "*.app" -type d -maxdepth 6 | grep -v "Pods/" | grep -v "XCFramework" | head -1)
+          echo "=== build/Build/Products/ ==="
+          ls -la build/Build/Products/Debug-iphoneos/ 2>/dev/null | head -20
+          APP=$(find build/Build/Products/Debug-iphoneos -maxdepth 1 -name "*.app" -type d 2>/dev/null | head -1)
           if [ -z "$APP" ]; then
-            echo "No .app found"
+            echo "=== Last 30 lines of build log ==="
+            tail -30 build.log 2>/dev/null || echo "No build log"
             exit 1
           fi
           echo "Found: $APP"
