@@ -64,7 +64,7 @@ jobs:
           xcodebuild \
             -workspace "$WORKSPACE" \
             -scheme PandaMusicStreamer \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
@@ -81,8 +81,8 @@ jobs:
         working-directory: private/ios
         run: |
           echo "=== Searching for .app ==="
-          ls -la build/Build/Products/Debug-iphoneos/ 2>/dev/null | head -20
-          APP=$(find build/Build/Products/Debug-iphoneos -maxdepth 1 -name "*.app" -type d 2>/dev/null | head -1)
+          ls -la build/Build/Products/Release-iphoneos/ 2>/dev/null | head -20
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -type d 2>/dev/null | head -1)
           if [ -z "$APP" ]; then
             echo "=== Last 30 lines of build log ==="
             tail -30 build.log 2>/dev/null || echo "No build log"
