@@ -88,8 +88,6 @@ jobs:
         working-directory: private/ios
         run: |
           echo "=== Searching for .app ==="
-          find build -type d -name "*.app" 2>/dev/null | head -10
-          echo "=== build/Build/Products/ ==="
           ls -la build/Build/Products/Debug-iphoneos/ 2>/dev/null | head -20
           APP=$(find build/Build/Products/Debug-iphoneos -maxdepth 1 -name "*.app" -type d 2>/dev/null | head -1)
           if [ -z "$APP" ]; then
@@ -98,10 +96,19 @@ jobs:
             exit 1
           fi
           echo "Found: $APP"
+          # Ad-hoc sign with codesign (bypasses xcodebuild iOS 26.5 restriction)
+          echo "Signing app with ad-hoc identity..."
+          codesign --force --sign - "$APP"
+          echo "Verifying signature..."
+          codesign --verify --verbose "$APP" 2>&1 || true
+          echo "Creating IPA..."
           mkdir -p Payload
           cp -r "$APP" Payload/
           zip -r "${{ github.workspace }}/PandaMusicStreamer.ipa" Payload
           ls -lh "${{ github.workspace }}/PandaMusicStreamer.ipa"
+          # Verify IPA structure
+          echo "=== IPA contents ==="
+          unzip -l "${{ github.workspace }}/PandaMusicStreamer.ipa" | head -20
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
