@@ -51,6 +51,23 @@ jobs:
         working-directory: private
         run: npx expo prebuild --platform ios --clean
 
+      - name: Show bundler script content
+        working-directory: private/ios
+        run: |
+          ruby -e '
+            require "xcodeproj"
+            project = Xcodeproj::Project.open("PandaMusicStreamer.xcodeproj")
+            project.targets.each do |target|
+              next unless target.name == "PandaMusicStreamer"
+              target.shell_script_build_phases.each do |phase|
+                if phase.name&.include?("Bundle React Native")
+                  puts "=== Bundler script ==="
+                  puts phase.shell_script
+                end
+              end
+            end
+          '
+
       - name: Install CocoaPods
         working-directory: private/ios
         run: pod install
