@@ -55,31 +55,29 @@ jobs:
         working-directory: private/ios
         run: pod install
 
-      - name: Build unsigned app with xcodebuild
+      - name: Build release app
         working-directory: private/ios
+        env:
+          NODE_BINARY: /usr/local/bin/node
         run: |
           WORKSPACE=$(ls -d *.xcworkspace | head -1)
-          # Get app name from app.json and find matching scheme
-          APP_NAME=$(node -p "require('../app.json').expo.name.replace(/\s+/g, '')" 2>/dev/null || echo "")
-          echo "App name from app.json: $APP_NAME"
-          # List all schemes and find the app one
-          ALL_SCHEMES=$(xcodebuild -workspace "$WORKSPACE" -list 2>/dev/null)
-          echo "$ALL_SCHEMES"
-          # Try the app name scheme first, fallback to last non-pod scheme
-          SCHEME="$APP_NAME"
-          echo "Using scheme: $SCHEME"
+          # Ensure node is accessible
+          which node
+          node --version
+          export PATH="/usr/local/bin:$PATH"
           xcodebuild \
             -workspace "$WORKSPACE" \
-            -scheme "$SCHEME" \
+            -scheme PandaMusicStreamer \
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO 2>&1 | tee build.log | tail -5
+            CODE_SIGNING_REQUIRED=NO 2>&1 | tee build.log | tail -30
           BUILD_EXIT=${PIPESTATUS[0]}
           echo "xcodebuild exit code: $BUILD_EXIT"
           if [ $BUILD_EXIT -ne 0 ]; then
-            tail -30 build.log
+            echo "=== ERRORS ==="
+            grep -i "error:" build.log | head -20
           fi
           exit $BUILD_EXIT
 
