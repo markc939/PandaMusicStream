@@ -56,26 +56,15 @@ jobs:
         run: pod install
 
       - name: Build release app
-        working-directory: private/ios
+        working-directory: private
         env:
           NODE_BINARY: /Users/runner/hostedtoolcache/node/22.23.1/arm64/bin/node
         run: |
-          WORKSPACE=$(ls -d *.xcworkspace | head -1)
-          xcodebuild \
-            -workspace "$WORKSPACE" \
-            -scheme PandaMusicStreamer \
-            -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO 2>&1 | tee build.log
+          npx expo run:ios --no-install --configuration Release --device --no-install 2>&1 | tee build.log | tail -50
           BUILD_EXIT=${PIPESTATUS[0]}
-          echo "=== xcodebuild exit code: $BUILD_EXIT ==="
+          echo "=== exit code: $BUILD_EXIT ==="
           if [ $BUILD_EXIT -ne 0 ]; then
-            echo "=== ALL ERRORS ==="
             grep -i "error" build.log | grep -v "note:" | grep -v "warning:" | grep -v "DEPRECATED" | head -30
-            echo "=== BUNDLER OUTPUT ==="
-            grep -A5 -B2 "Bundle React Native" build.log | head -30
           fi
           exit $BUILD_EXIT
 
