@@ -74,10 +74,8 @@ jobs:
           BUILD_EXIT=${PIPESTATUS[0]}
           echo "=== exit code: $BUILD_EXIT ==="
           if [ $BUILD_EXIT -ne 0 ]; then
-            echo "=== SCRIPT ERROR ==="
-            grep -A3 "Script-00DD1BFF" build.log | head -20
-            echo "=== BUNDLER ERRORS ==="
-            grep -B2 -A2 "Bundle React Native" build.log | grep -i "error\|fail\|cannot\|missing" | head -20
+            echo "=== FULL SCRIPT OUTPUT ==="
+            grep -A50 "PhaseScriptExecution Bundle" build.log | head -60
           fi
           exit $BUILD_EXIT
 
