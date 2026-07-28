@@ -55,30 +55,16 @@ jobs:
         working-directory: private/ios
         run: pod install
 
-      - name: Bundle JS for Release
-        working-directory: private
-        run: |
-          npm install --save-dev @react-native-community/cli @react-native-community/cli-platform-ios
-          npx react-native bundle \
-            --platform ios \
-            --dev false \
-            --entry-file node_modules/expo-router/entry \
-            --bundle-output ios/main.jsbundle \
-            --assets-dest ios/PandaMusicStreamer \
-            --reset-cache 2>&1 | tail -20
-          ls -la ios/main.jsbundle 2>/dev/null
-
-      - name: Build release app
+      - name: Build debug app
         working-directory: private/ios
         env:
           NODE_BINARY: /Users/runner/hostedtoolcache/node/22.23.1/arm64/bin/node
-          SKIP_BUNDLING: 1
         run: |
           WORKSPACE=$(ls -d *.xcworkspace | head -1)
           xcodebuild \
             -workspace "$WORKSPACE" \
             -scheme PandaMusicStreamer \
-            -configuration Release \
+            -configuration Debug \
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
