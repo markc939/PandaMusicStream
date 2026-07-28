@@ -88,7 +88,10 @@ jobs:
             --dev false \
             --entry-file "${ENTRY:-node_modules/expo-router/entry}" \
             --bundle-output ios/main.jsbundle \
-            --assets-dest ios 2>&1 | tail -20
+            --assets-dest ios 2>&1 | tail -10
+          echo "=== Bundle result ==="
+          ls -lh ios/main.jsbundle 2>/dev/null || echo "No main.jsbundle!"
+          ls ios/assets/ 2>/dev/null | head -5 || echo "No assets dir"
           cd ios
           # Skip the bundler in xcodebuild
           xcodebuild \
@@ -101,13 +104,14 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             SKIP_BUNDLING=1 2>&1 | tee build.log | tail -20
           BUILD_EXIT=${PIPESTATUS[0]}
-          echo "=== exit code: $BUILD_EXIT ==="
+          echo "=== xcodebuild exit code: $BUILD_EXIT ==="
           exit $BUILD_EXIT
 
       - name: Create unsigned IPA
         if: always()
         working-directory: private/ios
         run: |
+          set -x
           echo "=== Searching for .app ==="
           ls -la build/Build/Products/Release-iphoneos/ 2>/dev/null | head -20
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" -type d 2>/dev/null | head -1)
@@ -117,6 +121,17 @@ jobs:
             exit 1
           fi
           echo "Found: $APP"
+          # Ensure JS bundle and assets are inside the .app
+          echo "=== Checking for main.jsbundle in .app ==="
+          if [ ! -f "$APP/main.jsbundle" ]; then
+            echo "main.jsbundle NOT found in .app — copying from project"
+            ls -lh main.jsbundle 2>/dev/null && cp main.jsbundle "$APP/" && echo "Copied main.jsbundle"
+          fi
+          if [ -d assets ]; then
+            echo "Copying assets into .app..."
+            cp -r assets "$APP/"
+          fi
+          ls -lh "$APP/main.jsbundle" 2>/dev/null || echo "No main.jsbundle in .app!"
           # Ad-hoc sign with codesign (bypasses xcodebuild iOS 26.5 restriction)
           echo "Signing app with ad-hoc identity..."
           codesign --force --sign - "$APP"
@@ -132,6 +147,7 @@ jobs:
           unzip -l "${{ github.workspace }}/PandaMusicStreamer.ipa" | head -20
 
       - name: Upload IPA artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: PandaMusicStreamer-unsigned
