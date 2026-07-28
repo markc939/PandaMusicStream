@@ -57,9 +57,8 @@ jobs:
 
       - name: Bundle JS for Release
         working-directory: private
-        env:
-          NODE_BINARY: /Users/runner/hostedtoolcache/node/22.23.1/arm64/bin/node
         run: |
+          npm install --save-dev @react-native-community/cli @react-native-community/cli-platform-ios
           npx react-native bundle \
             --platform ios \
             --dev false \
@@ -68,7 +67,6 @@ jobs:
             --assets-dest ios/PandaMusicStreamer \
             --reset-cache 2>&1 | tail -20
           ls -la ios/main.jsbundle 2>/dev/null
-          ls -la ios/PandaMusicStreamer/assets/ 2>/dev/null | head -10
 
       - name: Build release app
         working-directory: private/ios
